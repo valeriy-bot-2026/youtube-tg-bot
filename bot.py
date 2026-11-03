@@ -1,53 +1,23 @@
 import os
+import re
 import logging
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
-from googleapiclient.discovery import build
-import re
+from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CommandHandler, filters
 
-# Ваші дані налаштовано
-TELEGRAM_TOKEN = "9006746049:AAGclepU7o8Isq6x9eOEZvbNc5YYtOEV4aI"
-YOUTUBE_API_KEY = "AIzaSyAhoRtnx7fqPF4ThB0wEQDdGskK0pjxo3E"
-PLAYLIST_ID = "PLR3hr1JiDRiQ"
+# Налаштування логування
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Токен вашого бота
+TOKEN = "9006746049:AAGclepU7o8Isq6x9eOEZvbNc5YYtOEV4aI"
 
-# Функція додавання та негайного очищення відео з плейлиста
-def add_and_clear_video(video_id):
-    try:
-        youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
-        
-        # 1. Додаємо відео в плейлист для генерації прев'ю
-        insert_response = youtube.playlistItems().insert(
-            part='snippet',
-            body={
-                'snippet': {
-                    'playlistId': PLAYLIST_ID,
-                    'resourceId': {
-                        'kind': 'youtube#video',
-                        'videoId': video_id
-                    }
-                }
-            }
-        ).execute()
-        
-        # Отримуємо унікальний ID елемента всередині плейлиста
-        playlist_item_id = insert_response['id']
-        
-        # 2. Одразу видаляємо його з плейлиста, щоб він не захаращувався
-        youtube.playlistItems().delete(
-            id=playlist_item_id
-        ).execute()
-        
-        return True
-    except Exception as e:
-        logging.error(f"Помилка при роботі з плейлистом YouTube: {e}")
-        return False
-
-def extract_video_id(url):
+def extract_youtube_id(url: str) -> str:
+    """Витягує чистий ID відео з будь-якого посилання YouTube."""
     patterns = [
         r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
-        r'(?:embed\/|v\/|youtu\.be\/|watch\?v=)([0-9A-Za-z_-]{11})'
+        r'(?:youtu\.be\/)([0-9A-Za-z_-]{11})'
     ]
     for pattern in patterns:
         match = re.search(pattern, url)
@@ -55,26 +25,34 @@ def extract_video_id(url):
             return match.group(1)
     return None
 
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробник команди /start"""
+    await update.message.reply_text(
+        "Вітаю! Я готовий до роботи. Надішліть мені будь-яке посилання на YouTube-відео, "
+        "і я перетворю його на ідеальне посилання з прев'ю для публікацій."
+    )
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробник вхідних повідомлень (посилань)"""
     text = update.message.text
-    video_id = extract_video_id(text)
+    
+    # Шукаємо ID відео в надісланому тексті
+    video_id = extract_youtube_id(text)
     
     if video_id:
-        # Додаємо і одразу вичищаємо плейлист
-        success = add_and_clear_video(video_id)
-        if success:
-            await update.message.reply_text(f"✅ Прев'ю активовано! Посилання для публікації:\nhttps://youtu.be/{video_id}")
-        else:
-            await update.message.reply_text("⚠️ Посилання розпізнано, але сталася помилка при зверненні до YouTube API.")
+        # Формуємо абсолютно чисте посилання короткого формату, яке гарантовано дає прев'ю
+        clean_url = f"https://youtu.be/{video_id}"
+        await update.message.reply_text(clean_url)
     else:
-        await update.message.reply_text("Будь ласка, надішліть коректне посилання на YouTube-відео.")
-
-def main():
-    application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    
-    print("Бот запущено і працює 24/7 з автоматичним очищенням плейлиста!")
-    application.run_polling()
+        await update.message.reply_text(
+            "Будь ласка, надішліть коректне посилання на відео з YouTube."
+        )
 
 if __name__ == '__main__':
-    main()
+    app = ApplicationBuilder().token(TOKEN).build()
+    
+    app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    
+    print("Бот запущено і готово до роботи...")
+    app.run_polling()
