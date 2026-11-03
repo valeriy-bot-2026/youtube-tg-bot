@@ -14,10 +14,10 @@ logging.basicConfig(
 TOKEN = "9006746049:AAGclepU7o8Isq6x9eOEZvbNc5YYtOEV4aI"
 
 def extract_youtube_id(url: str) -> str:
-    """Витягує чистий ID відео з будь-якого посилання YouTube."""
+    """Витягує чистий 11-значний ID відео з будь-якого посилання YouTube (зокрема з плейлистів та трекінгових параметрів)."""
     patterns = [
-        r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
-        r'(?:youtu\.be\/)([0-9A-Za-z_-]{11})'
+        r'(?:v=|\/|vi\/|youtu\.be\/)([0-9A-Za-z_-]{11})',
+        r'youtu\.be\/([0-9A-Za-z_-]{11})'
     ]
     for pattern in patterns:
         match = re.search(pattern, url)
@@ -40,8 +40,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     video_id = extract_youtube_id(text)
     
     if video_id:
-        # Формуємо абсолютно чисте посилання короткого формату, яке гарантовано дає прев'ю
-        clean_url = f"https://youtu.be/{video_id}"
+        # Формуємо канонічне посилання повного формату, яке гарантовано генерує прев'ю в Telegram
+        clean_url = f"https://www.youtube.com/watch?v={video_id}"
         await update.message.reply_text(clean_url)
     else:
         await update.message.reply_text(
